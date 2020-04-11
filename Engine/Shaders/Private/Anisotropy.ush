@@ -1,0 +1,53 @@
+// ref: https://seblagarde.wordpress.com/2017/09/09/siggraph-2017-physically-based-materials-where-are-we/
+// Convert anisotropic ratio (0->no isotropic; 1->full anisotropy in tangent direction) to roughness
+void ConvertAnisotropyToRoughness(float roughness, float anisotropy, out float roughnessT, out float roughnessB)
+{
+    // (0 <= anisotropy <= 1), therefore (0 <= anisoAspect <= 1)
+    // The 0.9 factor limits the aspect ratio to 10:1.
+    float anisoAspect = sqrt(1.0 - 0.9 * anisotropy);
+    roughnessT = (roughness) / anisoAspect; // Distort along tangent (rougher)
+    roughnessB = (roughness) * anisoAspect; // Straighten along bitangent (smoother)
+}
+
+float3 AnisotropicShading(FGBufferData GBuffer, float3 LobeRoughness, float3 LobeEnergy, float3 L, float3 V, half3 N)
+{
+    float3 H = normalize(L + V);
+	float NoL = dot(N, L);
+	float NoV = dot(N, V);
+	float LoV = dot(L, V);
+	float NoH = dot(N,H);
+	float VoH = dot(V,H);
+
+	float RoughnessX = 0;
+    float RoughnessY = 0;
+
+    float3 T = OctahedronToUnitVector(GBuffer.CustomData.xy * 2.0 - 1.0);
+	float3 B = normalize(cross(T, GBuffer.WorldNormal));
+	T = cross(GBuffer.WorldNormal, B);
+
+	if(dot(cross(T,GBuffer.WorldNormal),B) < 0.0)
+    {
+        T *= -1;
+    }
+
+	float D = 0;
+	float anisotropy = GBuffer.CustomData.a * 2 - 1;
+	ConvertAnisotropyToRoughness(GBuffer.Roughness, abs(anisotropy), RoughnessX, RoughnessY);
+	RoughnessX = max(1e-5, RoughnessX);
+	RoughnessY = max(1e-5, RoughnessY);
+
+	if(anisotropy >= 0.0)
+	{
+		D = D_GGXaniso(sqrt(RoughnessX), sqrt(RoughnessY), NoH, H, T, B) * LobeEnergy[1];
+	}
+	else
+	{
+		D = D_GGXaniso(sqrt(RoughnessY), sqrt(RoughnessX), NoH, H, T, B) * LobeEnergy[1];
+	}
+
+	float Vis = Vis_SmithJointApprox(LobeRoughness[1], NoV, NoL);
+	float3 F = F_Schlick(GBuffer.SpecularColor, VoH);
+    float3 Diffuse = Diffuse_Lambert(GBuffer.DiffuseColor);
+
+	return Diffuse * LobeEnergy[2] + (D * Vis * F);
+} 
