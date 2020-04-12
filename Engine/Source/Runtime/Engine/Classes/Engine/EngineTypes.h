@@ -485,7 +485,7 @@ enum EMaterialShadingModel
 	MSM_FromMaterialExpression	UMETA(DisplayName="From Material Expression"),
 	MSM_MAX
 };
-//define byme
+//define 789
 static_assert(MSM_NUM <= 16, "Do not exceed 16 shading models without expanding FMaterialShadingModelField to support uint32 instead of uint16!");
 
 /** Wrapper for a bitfield of shading models. A material contains one of these to describe what possible shading models can be used by that material. */
